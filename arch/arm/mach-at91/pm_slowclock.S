@@ -18,7 +18,7 @@
 
 #ifdef CONFIG_ARCH_AT91RM9200
 #include <mach/at91rm9200_mc.h>
-#elif defined(CONFIG_ARCH_AT91CAP9)
+#elif defined(CONFIG_ARCH_AT91CAP9) || defined(CONFIG_ARCH_AT91SAM9G45)
 #include <mach/at91cap9_ddrsdr.h>
 #else
 #include <mach/at91sam9_sdramc.h>
@@ -34,6 +34,9 @@
 #warning Assuming EB1 SDRAM controller is *NOT* used
 #endif
 
+#ifdef CONFIG_ARCH_AT91SAM9G45
+#define AT91_DDRSDRC	AT91_DDRSDRC1
+#endif
 /*
  * When SLOWDOWN_MASTER_CLOCK is defined we will also slow down the Master
  * clock during suspend by adjusting its prescalar and divisor.
@@ -127,7 +130,7 @@ ENTRY(at91_slow_clock)
 	/* Put SDRAM in self-refresh mode */
 	mov	r3, #1
 	str	r3, [r2, #AT91_SDRAMC_SRR]
-#elif defined(CONFIG_ARCH_AT91CAP9)
+#elif defined(CONFIG_ARCH_AT91CAP9) || defined(CONFIG_ARCH_AT91SAM9G45)
 	/* Enable SDRAM self-refresh mode */
 	ldr	r3, [r2, #AT91_DDRSDRC_LPR - AT91_DDRSDRC]
 	str	r3, .saved_sam9_lpr
@@ -239,7 +242,7 @@ ENTRY(at91_slow_clock)
 
 #ifdef CONFIG_ARCH_AT91RM9200
 	/* Do nothing - self-refresh is automatically disabled. */
-#elif defined(CONFIG_ARCH_AT91CAP9)
+#elif defined(CONFIG_ARCH_AT91CAP9) || defined(CONFIG_ARCH_AT91SAM9G45)
 	/* Restore LPR on AT91CAP9 */
 	ldr	r3, .saved_sam9_lpr
 	str	r3, [r2, #AT91_DDRSDRC_LPR - AT91_DDRSDRC]
@@ -271,7 +274,7 @@ ENTRY(at91_slow_clock)
 #ifdef CONFIG_ARCH_AT91RM9200
 .at91_va_base_sdramc:
 	.word AT91_VA_BASE_SYS
-#elif defined(CONFIG_ARCH_AT91CAP9)
+#elif defined(CONFIG_ARCH_AT91CAP9) || defined(CONFIG_ARCH_AT91SAM9G45)
 .at91_va_base_sdramc:
 	.word AT91_VA_BASE_SYS + AT91_DDRSDRC
 #else
