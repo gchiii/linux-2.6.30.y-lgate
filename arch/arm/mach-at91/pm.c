@@ -40,9 +40,11 @@
 #define sdram_selfrefresh_enable()	at91_sys_write(AT91_SDRAMC_SRR, 1)
 #define sdram_selfrefresh_disable()	do {} while (0)
 
-#elif defined(CONFIG_ARCH_AT91CAP9)
+#elif defined(CONFIG_ARCH_AT91CAP9) || defined(CONFIG_ARCH_AT91SAM9G45)
 #include <mach/at91cap9_ddrsdr.h>
-
+#if defined(CONFIG_ARCH_AT91SAM9G45)
+#define AT91_DDRSDRC	AT91_DDRSDRC1
+#endif
 static u32 saved_lpr;
 
 static inline void sdram_selfrefresh_enable(void)
@@ -202,7 +204,8 @@ static int at91_pm_verify_clocks(void)
 			pr_err("AT91: PM - Suspend-to-RAM with USB still active\n");
 			return 0;
 		}
-	} else if (cpu_is_at91sam9260() || cpu_is_at91sam9261() || cpu_is_at91sam9263() || cpu_is_at91sam9g20()) {
+	} else if (cpu_is_at91sam9260() || cpu_is_at91sam9261() || cpu_is_at91sam9263()
+			|| cpu_is_at91sam9g20() || cpu_is_at91sam9g10()) {
 		if ((scsr & (AT91SAM926x_PMC_UHP | AT91SAM926x_PMC_UDP)) != 0) {
 			pr_err("AT91: PM - Suspend-to-RAM with USB still active\n");
 			return 0;
