@@ -204,6 +204,13 @@ config ARCH_AT91SAM9260_SAM9XE
 
 comment "AT91SAM9260 / AT91SAM9XE Board Type"
 
+config MACH_LGATE100B
+	bool "Atmel AT91SAM9260 LGATE100B"
+	depends on ARCH_AT91SAM9260
+	help
+	  Select this if you are using Atmel's AT91SAM9260-EK or AT91SAM9XE Evaluation Kit
+	  <http://www.atmel.com/dyn/products/tools_card.asp?tool_id=3933>
+
 config MACH_AT91SAM9260EK
 	bool "Atmel AT91SAM9260-EK / AT91SAM9XE Evaluation Kit"
 	depends on ARCH_AT91SAM9260

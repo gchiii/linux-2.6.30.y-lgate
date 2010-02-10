@@ -42,6 +42,7 @@ obj-$(CONFIG_MACH_YL9200)	+= board-yl-9200.o
 
 # AT91SAM9260 board-specific support
 obj-$(CONFIG_MACH_AT91SAM9260EK) += board-sam9260ek.o
+obj-$(CONFIG_MACH_LGATE100B) += board-lgate100b.o
 obj-$(CONFIG_MACH_CAM60)	+= board-cam60.o
 obj-$(CONFIG_MACH_SAM9_L9260)	+= board-sam9-l9260.o
 obj-$(CONFIG_MACH_USB_A9260)	+= board-usb-a9260.o
