@@ -384,6 +384,11 @@ static void __init ek_board_init(void)
 	/* shutdown controller, wakeup button (5 msec low) */
 	at91_sys_write(AT91_SHDW_MR, AT91_SHDW_CPTWK0_(10) | AT91_SHDW_WKMODE0_LOW
 				| AT91_SHDW_RTTWKEN);
+				
+	// these show up in /proc/cpuinfo
+	system_rev = 0x01;
+	system_serial_low = 0x600DF00D;
+	system_serial_high = 0xDEADBEEF;
 }
 
 MACHINE_START(AT91SAM9260EK, "Atmel AT91SAM9260-lgate100b")
