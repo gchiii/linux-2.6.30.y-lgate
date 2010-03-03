@@ -196,7 +196,7 @@ static struct mtd_partition __initdata ek_nand_partition[] = {
 	{
 		.name	= "Partition 1",
 		.offset	= MTDPART_OFS_NXTBLK,
-		.size	= 60 * SZ_1M,
+		.size	= 28 * SZ_1M,
 	},
 	{
 		.name	= "Partition 2",
@@ -274,16 +274,15 @@ static struct at91_mmc_data __initdata ek_mmc_data = {
  * LEDs
  */
 static struct gpio_led ek_leds[] = {
-	{	/* "bottom" led, green, userled1 to be defined */
-		.name			= "ds5",
-		.gpio			= AT91_PIN_PA6,
-		.active_low		= 1,
+	{	/* "bottom" led */
+		.name			= "red",
+		.gpio			= AT91_PIN_PB23,
 		.default_trigger	= "none",
 	},
-	{	/* "power" led, yellow */
-		.name			= "ds1",
-		.gpio			= AT91_PIN_PA9,
-		.default_trigger	= "heartbeat",
+	{	/* "top" led */
+		.name			= "green",
+		.gpio			= AT91_PIN_PB20,
+		.default_trigger	= "none",
 	}
 };
 
@@ -387,7 +386,7 @@ static void __init ek_board_init(void)
 				| AT91_SHDW_RTTWKEN);
 }
 
-MACHINE_START(AT91SAM9260EK, "Atmel AT91SAM9260-EK mti")
+MACHINE_START(AT91SAM9260EK, "Atmel AT91SAM9260-lgate100b")
 	/* Maintainer: Atmel */
 	.phys_io	= AT91_BASE_SYS,
 	.io_pg_offst	= (AT91_VA_BASE_SYS >> 18) & 0xfffc,
