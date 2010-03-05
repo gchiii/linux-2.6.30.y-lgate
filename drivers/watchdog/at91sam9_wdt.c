@@ -43,7 +43,7 @@
 #define ticks_to_ms(t)	(((t + 1) * 1000) >> 8)
 
 /* Hardware timeout in seconds */
-#define WDT_HW_TIMEOUT 2
+#define WDT_HW_TIMEOUT 8
 
 /* Timer heartbeat (500ms) */
 #define WDT_TIMEOUT	(HZ/2)
