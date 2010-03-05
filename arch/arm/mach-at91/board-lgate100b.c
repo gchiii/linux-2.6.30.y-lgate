@@ -283,6 +283,11 @@ static struct gpio_led ek_leds[] = {
 		.name			= "green",
 		.gpio			= AT91_PIN_PB20,
 		.default_trigger	= "none",
+	},
+	{	/* backlight */
+		.name			= "backlight",
+		.gpio			= AT91_PIN_PA8,
+		.default_trigger	= "backlight",
 	}
 };
 
@@ -354,6 +359,36 @@ static void __init ek_add_device_buttons(void) {}
 #endif
 
 
+static void __init lgate100b_gpio_init(void)
+{
+	// configure hardware rev bits as inputs with no pullups
+	at91_set_gpio_input(AT91_PIN_PC7, 0);
+	at91_set_gpio_input(AT91_PIN_PC8, 0);
+	at91_set_gpio_input(AT91_PIN_PC9, 0);
+	at91_set_gpio_input(AT91_PIN_PC10, 0);
+	
+	// configure display enabled input, with pullup
+	at91_set_gpio_input(AT91_PIN_PA6, 1);
+	// configure display rotate input, with pullup
+	at91_set_gpio_input(AT91_PIN_PA5, 1);
+	
+}
+/*
+ * read the hw rev 
+ */
+static u8 __init lgate_100b_get_hw_rev(void)
+{
+	u8 value = 0;
+	
+	value |= at91_get_gpio_value(AT91_PIN_PC7);
+	value |= at91_get_gpio_value(AT91_PIN_PC8) << 1;
+	value |= at91_get_gpio_value(AT91_PIN_PC9) << 2;
+	value |= at91_get_gpio_value(AT91_PIN_PC10) << 3;
+	
+	return value;
+}
+
+
 static void __init ek_board_init(void)
 {
 	/* Serial */
@@ -384,9 +419,12 @@ static void __init ek_board_init(void)
 	/* shutdown controller, wakeup button (5 msec low) */
 	at91_sys_write(AT91_SHDW_MR, AT91_SHDW_CPTWK0_(10) | AT91_SHDW_WKMODE0_LOW
 				| AT91_SHDW_RTTWKEN);
+
+	lgate100b_gpio_init();
+	
 				
 	// these show up in /proc/cpuinfo
-	system_rev = 0x01;
+	system_rev = lgate_100b_get_hw_rev();
 	system_serial_low = 0x600DF00D;
 	system_serial_high = 0xDEADBEEF;
 }
