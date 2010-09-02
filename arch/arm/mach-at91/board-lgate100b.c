@@ -57,13 +57,18 @@ static void __init ek_map_io(void)
 	/* DGBU on ttyS0. (Rx & Tx only) */
 	at91_register_uart(0, 0, 0);
 
-	/* USART0 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
-	at91_register_uart(AT91SAM9260_ID_US0, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
+    if ((system_rev & 0xf) >= 9) // is this Lgate-50 with modem port?
+    {
+    	/* USART0 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
+		at91_register_uart(AT91SAM9260_ID_US0, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
 			   | ATMEL_UART_DTR | ATMEL_UART_DSR | ATMEL_UART_DCD
 			   | ATMEL_UART_RI);
 
-	/* USART1 on ttyS2. (Rx, Tx, RTS, CTS) */
-	at91_register_uart(AT91SAM9260_ID_US1, 2, ATMEL_UART_CTS | ATMEL_UART_RTS);
+ 		/* USART1 on ttyS2. (Rx, Tx, RTS, CTS) */
+		at91_register_uart(AT91SAM9260_ID_US1, 2, ATMEL_UART_CTS | ATMEL_UART_RTS);
+	}
+//	/* USART3 on ttyS3. (Rx, Tx) */
+//	at91_register_uart(AT91SAM9260_ID_US2, 3, 0);
 
 	/* set serial console to ttyS0 (ie, DBGU) */
 	at91_set_serial_console(0);
@@ -136,16 +141,18 @@ static void __init at73c213_set_clk(struct at73c213_board_info *info) {}
 static struct spi_board_info ek_spi_devices[] = {
 	{	/* lcd */
 		.modalias	= "ssd1805",
-		.chip_select	= 0,
+		.chip_select	= 2,  // was 0 in hw rev 0, moved for serial boot flash
 		.max_speed_hz	= 5 * 1000 * 1000,
 		.bus_num	= 0,
 	},
+#if 0 // some day this may be the energy chips if the pic is removed
 	{	/* lcd */
 		.modalias	= "spidev",
 		.chip_select	= 0,
 		.max_speed_hz	= 5 * 1000 * 1000,
 		.bus_num	= 1,
 	},
+#endif	
 #if !defined(CONFIG_MMC_AT91)
 	{	/* DataFlash chip */
 		.modalias	= "mtd_dataflash",
@@ -224,7 +231,7 @@ static struct atmel_nand_data __initdata ek_nand_data = {
 	.bus_width_16	= 0,
 #endif
 };
-
+#ifdef CONFIG_ARCH_AT91SAM9260
 static struct sam9_smc_config __initdata ek_nand_smc_config = {
 	.ncs_read_setup		= 0,
 	.nrd_setup		= 1,
@@ -242,7 +249,25 @@ static struct sam9_smc_config __initdata ek_nand_smc_config = {
 	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE,
 	.tdf_cycles		= 2,
 };
+#else // CONFIG_AT91SAM9G20
+static struct sam9_smc_config __initdata ek_nand_smc_config = {
+	.ncs_read_setup		= 0,
+	.nrd_setup		= 2,
+	.ncs_write_setup	= 0,
+	.nwe_setup		= 2,
 
+	.ncs_read_pulse		= 4,
+	.nrd_pulse		= 4,
+	.ncs_write_pulse	= 4,
+	.nwe_pulse		= 4,
+
+	.read_cycle		= 7,
+	.write_cycle		= 7,
+
+	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE,
+	.tdf_cycles		= 3,
+};
+#endif
 static void __init ek_add_device_nand(void)
 {
 	/* setup bus-width (8 or 16) */
@@ -288,6 +313,16 @@ static struct gpio_led ek_leds[] = {
 		.name			= "backlight",
 		.gpio			= AT91_PIN_PA8,
 		.default_trigger	= "backlight",
+	},
+	{	/* USB power */
+		.name			= "USBPower",
+		.gpio			= AT91_PIN_PB24,
+		.default_trigger	= "USBPower",
+	},
+	{	/* EOP power*/
+		.name			= "EOPPower",
+		.gpio			= AT91_PIN_PB25,
+		.default_trigger	= "EOPPower",
 	}
 };
 
@@ -312,13 +347,18 @@ static struct i2c_board_info __initdata ek_i2c_devices[] = {
 
 
 
-static void __init lgate100b_gpio_init(void)
+static void __init lgate_gpio_init(void)
 {
 	// configure hardware rev bits as inputs with no pullups
 	at91_set_gpio_input(AT91_PIN_PC7, 0);
 	at91_set_gpio_input(AT91_PIN_PC8, 0);
 	at91_set_gpio_input(AT91_PIN_PC9, 0);
 	at91_set_gpio_input(AT91_PIN_PC10, 0);
+	
+	// configure configuration bits as inputs with weak pullups
+	at91_set_gpio_input(AT91_PIN_PC29, 1);
+	at91_set_gpio_input(AT91_PIN_PC30, 1);
+	at91_set_gpio_input(AT91_PIN_PC31, 1);
 	
 	// configure display enabled input, with pullup
 	at91_set_gpio_input(AT91_PIN_PA6, 1);
@@ -329,29 +369,38 @@ static void __init lgate100b_gpio_init(void)
 /*
  * read the hw rev 
  */
-static u8 __init lgate_100b_get_hw_rev(void)
+static void lgate_get_hw_rev(void)
 {
-	u8 value = 0;
+	u16 value = 0;
 	
 	value |= at91_get_gpio_value(AT91_PIN_PC7);
 	value |= at91_get_gpio_value(AT91_PIN_PC8) << 1;
 	value |= at91_get_gpio_value(AT91_PIN_PC9) << 2;
 	value |= at91_get_gpio_value(AT91_PIN_PC10) << 3;
 	
-	return value;
+	if (value >= 8)	
+    {
+		// Configuration bits in upper byte of system rev	
+		value |= at91_get_gpio_value(AT91_PIN_PC29) << 8; // not defined yet 
+		value |= at91_get_gpio_value(AT91_PIN_PC30) << 9; // Energy chips present
+		value |= at91_get_gpio_value(AT91_PIN_PC31) << 10; // ZigBee Present
+    }
+	system_rev = value;
 }
 
 
 static void __init ek_board_init(void)
 {
+	lgate_gpio_init();
+    // get hw rev bits	
+	// these show up in /proc/cpuinfo
+	lgate_get_hw_rev();
 	/* Serial */
 	at91_add_device_serial();
 	/* USB Host */
 	at91_add_device_usbh(&ek_usbh_data);
 	/* USB Device */
 	at91_add_device_udc(&ek_udc_data);
-	/* SPI */
-	at91_add_device_spi(ek_spi_devices, ARRAY_SIZE(ek_spi_devices));
 	/* NAND */
 	ek_add_device_nand();
 	/* Ethernet */
@@ -366,21 +415,24 @@ static void __init ek_board_init(void)
 	at73c213_set_clk(&at73c213_data);
 	at91_add_device_ssc(AT91SAM9260_ID_SSC, ATMEL_SSC_TX);
 	/* LEDs */
+    if ((system_rev & 0xf) >= 9) // Lgate-50 Rev B?
+    {
+       ek_leds[0].gpio = AT91_PIN_PB19;  //Red LED moved to free modem control lines
+       ek_leds[3].gpio = AT91_PIN_PB30;  //USB PWR moved to free modem control lines
+       ek_leds[4].gpio = AT91_PIN_PB31;  //EOP PWR moved to free modem control lines
+	}
 	at91_gpio_leds(ek_leds, ARRAY_SIZE(ek_leds));
-	/* shutdown controller, wakeup button (5 msec low) */
-	at91_sys_write(AT91_SHDW_MR, AT91_SHDW_CPTWK0_(10) | AT91_SHDW_WKMODE0_LOW
-				| AT91_SHDW_RTTWKEN);
+//	/* shutdown controller, wakeup button (5 msec low) */
+//	at91_sys_write(AT91_SHDW_MR, AT91_SHDW_CPTWK0_(10) | AT91_SHDW_WKMODE0_LOW
+//				| AT91_SHDW_RTTWKEN);
 
-	lgate100b_gpio_init();
-	
 				
-	// these show up in /proc/cpuinfo
-	system_rev = lgate_100b_get_hw_rev();
 	system_serial_low = 0x600DF00D;
 	system_serial_high = 0xDEADBEEF;
+	/* SPI */
+	at91_add_device_spi(ek_spi_devices, ARRAY_SIZE(ek_spi_devices));
 }
-
-MACHINE_START(AT91SAM9260EK, "Atmel AT91SAM9260-lgate100b")
+MACHINE_START(AT91SAM9G20EK, "Atmel AT91SAM9G20 Locus Energy")
 	/* Maintainer: Atmel */
 	.phys_io	= AT91_BASE_SYS,
 	.io_pg_offst	= (AT91_VA_BASE_SYS >> 18) & 0xfffc,
