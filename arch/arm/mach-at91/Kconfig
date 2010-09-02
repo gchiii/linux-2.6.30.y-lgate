@@ -362,6 +362,13 @@ if ARCH_AT91SAM9G20
 
 comment "AT91SAM9G20 Board Type"
 
+config MACH_LGATE100B
+	bool "Atmel AT91SAM9260 LGATE100B"
+	depends on ARCH_AT91SAM9G20
+	help
+	  Select this if you are doing Locus Energy's Lgate-100 w/at91sam9g20
+	  <http://www.atmel.com/dyn/products/tools_card.asp?tool_id=3933>
+	  
 config MACH_AT91SAM9G20EK
 	bool "Atmel AT91SAM9G20-EK Evaluation Kit"
 	depends on ARCH_AT91SAM9G20
