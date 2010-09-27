@@ -48,6 +48,78 @@
 #include "sam9_smc.h"
 #include "generic.h"
 
+static void __init lgate_gpio_init(void)
+{
+	// configure hardware rev bits as inputs with no pullups
+	at91_set_gpio_input(AT91_PIN_PC7, 0);
+	at91_set_gpio_input(AT91_PIN_PC8, 0);
+	at91_set_gpio_input(AT91_PIN_PC9, 0);
+	at91_set_gpio_input(AT91_PIN_PC10, 0);
+	
+	// configure configuration bits as inputs with weak pullups
+	at91_set_gpio_input(AT91_PIN_PC29, 1);
+	at91_set_gpio_input(AT91_PIN_PC30, 1);
+	at91_set_gpio_input(AT91_PIN_PC31, 1);
+	
+	// configure display enabled input, with pullup
+	at91_set_gpio_input(AT91_PIN_PA6, 1);
+	// configure display rotate input, with pullup
+	at91_set_gpio_input(AT91_PIN_PA5, 1);
+	
+}
+/*
+ * read the hw rev 
+ */
+static void lgate_get_hw_rev(void)
+{
+	u16 value = 0;
+	
+	value |= at91_get_gpio_value(AT91_PIN_PC7);
+	value |= at91_get_gpio_value(AT91_PIN_PC8) << 1;
+	value |= at91_get_gpio_value(AT91_PIN_PC9) << 2;
+	value |= at91_get_gpio_value(AT91_PIN_PC10) << 3;
+	
+	if (value >= 8)	
+    {
+		// Configuration bits in upper byte of system rev	
+		value |= at91_get_gpio_value(AT91_PIN_PC29) << 8; // not defined yet 
+		value |= at91_get_gpio_value(AT91_PIN_PC30) << 9; // Energy chips present
+		value |= at91_get_gpio_value(AT91_PIN_PC31) << 10; // ZigBee Present
+    }
+	system_rev = value;
+}
+
+/*
+ * LEDs
+ */
+static struct gpio_led ek_leds[] = {
+	{	/* "bottom" led */
+		.name			= "red",
+		.gpio			= AT91_PIN_PB23,
+		.default_trigger	= "none",
+	},
+	{	/* "top" led */
+		.name			= "green",
+		.gpio			= AT91_PIN_PB20,
+		.default_trigger	= "none",
+	},
+	{	/* backlight */
+		.name			= "backlight",
+		.gpio			= AT91_PIN_PA8,
+		.default_trigger	= "backlight",
+	},
+	{	/* USB power */
+		.name			= "USBPower",
+		.gpio			= AT91_PIN_PB24,
+		.default_trigger	= "USBPower",
+	},
+	{	/* EOP power*/
+		.name			= "EOPPower",
+		.gpio			= AT91_PIN_PB25,
+		.default_trigger	= "EOPPower",
+	}
+};
+
 
 static void __init ek_map_io(void)
 {
@@ -57,8 +129,16 @@ static void __init ek_map_io(void)
 	/* DGBU on ttyS0. (Rx & Tx only) */
 	at91_register_uart(0, 0, 0);
 
-    if ((system_rev & 0xf) >= 9) // is this Lgate-50 with modem port?
+	lgate_gpio_init();
+    // get hw rev bits	
+	// these show up in /proc/cpuinfo
+	lgate_get_hw_rev();
+
+    if ((system_rev & 0xf) >= 9) // Lgate-50 Rev B?
     {
+       ek_leds[0].gpio = AT91_PIN_PB19;  //Red LED moved to free modem control lines
+       ek_leds[3].gpio = AT91_PIN_PB30;  //USB PWR moved to free modem control lines
+       ek_leds[4].gpio = AT91_PIN_PB31;  //EOP PWR moved to free modem control lines
     	/* USART0 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
 		at91_register_uart(AT91SAM9260_ID_US0, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
 			   | ATMEL_UART_DTR | ATMEL_UART_DSR | ATMEL_UART_DCD
@@ -66,7 +146,7 @@ static void __init ek_map_io(void)
 
  		/* USART1 on ttyS2. (Rx, Tx, RTS, CTS) */
 		at91_register_uart(AT91SAM9260_ID_US1, 2, ATMEL_UART_CTS | ATMEL_UART_RTS);
-	}
+    }
 //	/* USART3 on ttyS3. (Rx, Tx) */
 //	at91_register_uart(AT91SAM9260_ID_US2, 3, 0);
 
@@ -296,38 +376,6 @@ static struct at91_mmc_data __initdata ek_mmc_data = {
 
 
 /*
- * LEDs
- */
-static struct gpio_led ek_leds[] = {
-	{	/* "bottom" led */
-		.name			= "red",
-		.gpio			= AT91_PIN_PB23,
-		.default_trigger	= "none",
-	},
-	{	/* "top" led */
-		.name			= "green",
-		.gpio			= AT91_PIN_PB20,
-		.default_trigger	= "none",
-	},
-	{	/* backlight */
-		.name			= "backlight",
-		.gpio			= AT91_PIN_PA8,
-		.default_trigger	= "backlight",
-	},
-	{	/* USB power */
-		.name			= "USBPower",
-		.gpio			= AT91_PIN_PB24,
-		.default_trigger	= "USBPower",
-	},
-	{	/* EOP power*/
-		.name			= "EOPPower",
-		.gpio			= AT91_PIN_PB25,
-		.default_trigger	= "EOPPower",
-	}
-};
-
-
-/*
  * I2C devices
  */
 static struct at24_platform_data at24c512 = {
@@ -345,56 +393,9 @@ static struct i2c_board_info __initdata ek_i2c_devices[] = {
 };
 
 
-
-
-static void __init lgate_gpio_init(void)
-{
-	// configure hardware rev bits as inputs with no pullups
-	at91_set_gpio_input(AT91_PIN_PC7, 0);
-	at91_set_gpio_input(AT91_PIN_PC8, 0);
-	at91_set_gpio_input(AT91_PIN_PC9, 0);
-	at91_set_gpio_input(AT91_PIN_PC10, 0);
-	
-	// configure configuration bits as inputs with weak pullups
-	at91_set_gpio_input(AT91_PIN_PC29, 1);
-	at91_set_gpio_input(AT91_PIN_PC30, 1);
-	at91_set_gpio_input(AT91_PIN_PC31, 1);
-	
-	// configure display enabled input, with pullup
-	at91_set_gpio_input(AT91_PIN_PA6, 1);
-	// configure display rotate input, with pullup
-	at91_set_gpio_input(AT91_PIN_PA5, 1);
-	
-}
-/*
- * read the hw rev 
- */
-static void lgate_get_hw_rev(void)
-{
-	u16 value = 0;
-	
-	value |= at91_get_gpio_value(AT91_PIN_PC7);
-	value |= at91_get_gpio_value(AT91_PIN_PC8) << 1;
-	value |= at91_get_gpio_value(AT91_PIN_PC9) << 2;
-	value |= at91_get_gpio_value(AT91_PIN_PC10) << 3;
-	
-	if (value >= 8)	
-    {
-		// Configuration bits in upper byte of system rev	
-		value |= at91_get_gpio_value(AT91_PIN_PC29) << 8; // not defined yet 
-		value |= at91_get_gpio_value(AT91_PIN_PC30) << 9; // Energy chips present
-		value |= at91_get_gpio_value(AT91_PIN_PC31) << 10; // ZigBee Present
-    }
-	system_rev = value;
-}
-
-
 static void __init ek_board_init(void)
 {
-	lgate_gpio_init();
-    // get hw rev bits	
-	// these show up in /proc/cpuinfo
-	lgate_get_hw_rev();
+
 	/* Serial */
 	at91_add_device_serial();
 	/* USB Host */
@@ -415,12 +416,21 @@ static void __init ek_board_init(void)
 	at73c213_set_clk(&at73c213_data);
 	at91_add_device_ssc(AT91SAM9260_ID_SSC, ATMEL_SSC_TX);
 	/* LEDs */
+#ifdef jll 
     if ((system_rev & 0xf) >= 9) // Lgate-50 Rev B?
     {
        ek_leds[0].gpio = AT91_PIN_PB19;  //Red LED moved to free modem control lines
        ek_leds[3].gpio = AT91_PIN_PB30;  //USB PWR moved to free modem control lines
        ek_leds[4].gpio = AT91_PIN_PB31;  //EOP PWR moved to free modem control lines
-	}
+    	/* USART0 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
+		at91_register_uart(AT91SAM9260_ID_US0, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
+			   | ATMEL_UART_DTR | ATMEL_UART_DSR | ATMEL_UART_DCD
+			   | ATMEL_UART_RI);
+
+ 		/* USART1 on ttyS2. (Rx, Tx, RTS, CTS) */
+		at91_register_uart(AT91SAM9260_ID_US1, 2, ATMEL_UART_CTS | ATMEL_UART_RTS);
+    }
+#endif    
 	at91_gpio_leds(ek_leds, ARRAY_SIZE(ek_leds));
 //	/* shutdown controller, wakeup button (5 msec low) */
 //	at91_sys_write(AT91_SHDW_MR, AT91_SHDW_CPTWK0_(10) | AT91_SHDW_WKMODE0_LOW
