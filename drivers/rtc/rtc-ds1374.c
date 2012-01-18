@@ -36,6 +36,7 @@
 #define DS1374_REG_CR_AIE	0x01 /* Alarm Int. Enable */
 #define DS1374_REG_CR_WDALM	0x20 /* 1=Watchdog, 0=Alarm */
 #define DS1374_REG_CR_WACE	0x40 /* WD/Alarm counter enable */
+#define DS1374_REG_CR_WDSTR 0x08 /* Watchdog Reset Steering Bit 0=/RST pin, 1 = /INT pin */
 #define DS1374_REG_SR		0x08 /* Status */
 #define DS1374_REG_SR_OSF	0x80 /* Oscillator Stop Flag */
 #define DS1374_REG_SR_AF	0x01 /* Alarm Flag */
@@ -346,6 +347,38 @@ static int ds1374_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
 			goto out;
 
 		break;
+		
+	case RTC_WIE_ON:
+		ret = i2c_smbus_read_byte_data(client, DS1374_REG_CR);
+		if (ret < 0)
+			goto out;
+		// load WDT counter	
+		ret = ds1374_write_rtc(client, arg, DS1374_REG_WDALM0, 3);
+		if (ret)
+			goto out;
+		// enable WDT to cause a RESET
+		ret |= DS1374_REG_CR_WACE | DS1374_REG_CR_WDALM;
+		ret &= ~DS1374_REG_CR_WDSTR;
+
+		ret = i2c_smbus_write_byte_data(client, DS1374_REG_CR, ret);
+		if (ret < 0)
+			goto out;
+
+		break;
+		
+	case RTC_WIE_OFF:
+		ret = i2c_smbus_read_byte_data(client, DS1374_REG_CR);
+		if (ret < 0)
+			goto out;
+		// disnable WDT
+		ret &= ~DS1374_REG_CR_WACE;
+
+		ret = i2c_smbus_write_byte_data(client, DS1374_REG_CR, ret);
+		if (ret < 0)
+			goto out;
+
+		break;
+			
 	}
 
 out:
@@ -378,8 +411,10 @@ static int ds1374_probe(struct i2c_client *client,
 	mutex_init(&ds1374->mutex);
 
 	ret = ds1374_check_rtc_status(client);
-	if (ret)
+	if (ret) {
+		dev_err(&client->dev, "unable to find ds1374\n");
 		goto out_free;
+	}
 
 	if (client->irq > 0) {
 		ret = request_irq(client->irq, ds1374_irq, 0,
@@ -397,7 +432,10 @@ static int ds1374_probe(struct i2c_client *client,
 		dev_err(&client->dev, "unable to register the class device\n");
 		goto out_irq;
 	}
-
+	// used dev_err since printk did not seem to work
+	dev_err(&client->dev, "Set DS1374 to 2K trickle charge\n");
+	i2c_smbus_write_byte_data(client, DS1374_REG_TCR, 0xA6);
+	
 	return 0;
 
 out_irq:

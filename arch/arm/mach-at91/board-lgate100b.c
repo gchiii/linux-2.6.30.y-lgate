@@ -27,9 +27,12 @@
 #include <linux/spi/spi.h>
 #include <linux/spi/at73c213.h>
 #include <linux/clk.h>
+#include <linux/i2c-gpio.h>
 #include <linux/i2c/at24.h>
 #include <linux/gpio_keys.h>
 #include <linux/input.h>
+#include <linux/mtd/mtd.h>
+#include <linux/spi/flash.h>
 
 #include <asm/setup.h>
 #include <asm/mach-types.h>
@@ -43,7 +46,7 @@
 #include <mach/board.h>
 #include <mach/gpio.h>
 #include <mach/at91sam9_smc.h>
-#include <mach/at91_shdwc.h>
+#include <mach/at91_rstc.h>
 
 #include "sam9_smc.h"
 #include "generic.h"
@@ -56,10 +59,13 @@ static void __init lgate_gpio_init(void)
 	at91_set_gpio_input(AT91_PIN_PC9, 0);
 	at91_set_gpio_input(AT91_PIN_PC10, 0);
 	
-	// configure configuration bits as inputs with weak pullups
-	at91_set_gpio_input(AT91_PIN_PC29, 1);
-	at91_set_gpio_input(AT91_PIN_PC30, 1);
-	at91_set_gpio_input(AT91_PIN_PC31, 1);
+	// debug board option jumper 
+	at91_set_gpio_input(AT91_PIN_PC25, 0);
+	
+	// configure configuration bits as inputs with no pullups
+	at91_set_gpio_input(AT91_PIN_PC29, 0);
+	at91_set_gpio_input(AT91_PIN_PC30, 0);
+	at91_set_gpio_input(AT91_PIN_PC31, 0);
 	
 	// configure display enabled input, with pullup
 	at91_set_gpio_input(AT91_PIN_PA6, 1);
@@ -70,6 +76,14 @@ static void __init lgate_gpio_init(void)
 /*
  * read the hw rev 
  */
+ // 0 - Lgate-101 Rev A & B
+ // 1 - Lgate-101 Rev C & D
+ 
+ // 4 - Lgate -90 Rev A
+ 
+ // 8 - Lgate - 50 Rev A
+ // 9 - Lgate - 50 Rev B
+ static u16 lgate_type;
 static void lgate_get_hw_rev(void)
 {
 	u16 value = 0;
@@ -79,12 +93,15 @@ static void lgate_get_hw_rev(void)
 	value |= at91_get_gpio_value(AT91_PIN_PC9) << 2;
 	value |= at91_get_gpio_value(AT91_PIN_PC10) << 3;
 	
-	if (value >= 8)	
+	lgate_type = value;
+	
+	if (lgate_type >= 4)	
     {
 		// Configuration bits in upper byte of system rev	
-		value |= at91_get_gpio_value(AT91_PIN_PC29) << 8; // not defined yet 
+		value |= at91_get_gpio_value(AT91_PIN_PC29) << 8; // cell Present  
 		value |= at91_get_gpio_value(AT91_PIN_PC30) << 9; // Energy chips present
 		value |= at91_get_gpio_value(AT91_PIN_PC31) << 10; // ZigBee Present
+		value |= at91_get_gpio_value(AT91_PIN_PC25) << 11; // Debug board option jumper 1 = not present
     }
 	system_rev = value;
 }
@@ -92,6 +109,9 @@ static void lgate_get_hw_rev(void)
 /*
  * LEDs
  */
+#define RED_LED_INDEX 0
+#define USB_PWR_INDEX 5
+#define EOP_PWR_INDEX 6
 static struct gpio_led ek_leds[] = {
 	{	/* "bottom" led */
 		.name			= "red",
@@ -108,18 +128,34 @@ static struct gpio_led ek_leds[] = {
 		.gpio			= AT91_PIN_PA8,
 		.default_trigger	= "backlight",
 	},
+	{	// yellow led
+		.name			= "yellow",
+		.gpio			= AT91_PIN_PA10,
+		.default_trigger	= "none",
+	},
+	{	//blue led
+		.name			= "blue",
+		.gpio			= AT91_PIN_PA11,
+		.default_trigger	= "none",
+	},
 	{	/* USB power */
 		.name			= "USBPower",
 		.gpio			= AT91_PIN_PB24,
-		.default_trigger	= "USBPower",
+		.default_trigger	= "none",
 	},
-	{	/* EOP power*/
+	{	// EOP power also cell power on Lgate 90
 		.name			= "EOPPower",
 		.gpio			= AT91_PIN_PB25,
-		.default_trigger	= "EOPPower",
-	}
+		.default_trigger	= "none",
+	},
+	{	//cell reset
+		.name			= "CellReset",
+		.gpio			= AT91_PIN_PC26,
+		.default_trigger	= "none",
+	},
 };
 
+extern struct i2c_gpio_platform_data i2c_pdata;
 
 static void __init ek_map_io(void)
 {
@@ -134,21 +170,36 @@ static void __init ek_map_io(void)
 	// these show up in /proc/cpuinfo
 	lgate_get_hw_rev();
 
-    if ((system_rev & 0xf) >= 9) // Lgate-50 Rev B?
+    if (lgate_type >= 4) // Lgate-50 & Lgate-90
     {
-       ek_leds[0].gpio = AT91_PIN_PB19;  //Red LED moved to free modem control lines
-       ek_leds[3].gpio = AT91_PIN_PB30;  //USB PWR moved to free modem control lines
-       ek_leds[4].gpio = AT91_PIN_PB31;  //EOP PWR moved to free modem control lines
-    	/* USART0 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
+       ek_leds[RED_LED_INDEX].gpio = AT91_PIN_PB19;  //Red LED moved to free modem control lines
+       ek_leds[USB_PWR_INDEX].gpio = AT91_PIN_PB30;  //USB PWR moved to free modem control lines
+       ek_leds[EOP_PWR_INDEX].gpio = AT91_PIN_PB31;  //EOP PWR moved to free modem control lines
+    	/* USART0 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI)  mode on Lgate 50*/
 		at91_register_uart(AT91SAM9260_ID_US0, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
 			   | ATMEL_UART_DTR | ATMEL_UART_DSR | ATMEL_UART_DCD
 			   | ATMEL_UART_RI);
 
- 		/* USART1 on ttyS2. (Rx, Tx, RTS, CTS) */
+ 		/* USART1 on ttyS2. (Rx, Tx, RTS, CTS)  zigbee lgate-50 */
 		at91_register_uart(AT91SAM9260_ID_US1, 2, ATMEL_UART_CTS | ATMEL_UART_RTS);
+		/* USART2 on ttyS3. (Rx, Tx)  */ 
+		at91_register_uart(AT91SAM9260_ID_US2, 3, 0);
+		
+		if (lgate_type == 4 || lgate_type == 5) // Lgate-90 only
+		{
+			/* USART3 on ttyS4. (Rx, Tx)  RS-485*/
+			at91_set_gpio_output(AT91_PIN_PC27, 0); // RX not eanble, therfore a 0 is enable
+			at91_register_uart(AT91SAM9260_ID_US3, 4, ATMEL_UART_RTS); // RTS controls TX enable
+			/* USART4 on ttyS5. (Rx, Tx)  Energy Chip RS-232 ??*/
+			at91_register_uart(AT91SAM9260_ID_US4, 5, 0);
+			if (lgate_type == 4) // Lgate-50  Rev A only
+			{
+				// swap pins since RTC is wired backwards and eeprom not needed for now
+				i2c_pdata.sda_pin = AT91_PIN_PA24;
+				i2c_pdata.scl_pin = AT91_PIN_PA23;
+			}
+		}
     }
-//	/* USART3 on ttyS3. (Rx, Tx) */
-//	at91_register_uart(AT91SAM9260_ID_US2, 3, 0);
 
 	/* set serial console to ttyS0 (ie, DBGU) */
 	at91_set_serial_console(0);
@@ -170,95 +221,58 @@ static struct at91_usbh_data __initdata ek_usbh_data = {
 /*
  * USB Device port
  */
-static struct at91_udc_data __initdata ek_udc_data = {
-	.vbus_pin	= AT91_PIN_PC5,
-	.pullup_pin	= 0,		/* pull-up driven by UDC */
-};
-
-/*
- * Compact Flash (via Expansion Connector)
- */
-static struct at91_cf_data __initdata ek_cf_data = {
-	// .irq_pin	= ... user defined
-	// .det_pin	= ... user defined
-	// .vcc_pin	= ... user defined
-	// .rst_pin	= ... user defined
-	.chipselect	= 4,
-};
-
-/*
- * Audio
- */
-static struct at73c213_board_info at73c213_data = {
-	.ssc_id		= 0,
-	.shortname	= "AT91SAM9260-EK external DAC",
-};
-
-#if defined(CONFIG_SND_AT73C213) || defined(CONFIG_SND_AT73C213_MODULE)
-static void __init at73c213_set_clk(struct at73c213_board_info *info)
-{
-	struct clk *pck0;
-	struct clk *plla;
-
-	pck0 = clk_get(NULL, "pck0");
-	plla = clk_get(NULL, "plla");
-
-	/* AT73C213 MCK Clock */
-	at91_set_B_periph(AT91_PIN_PC1, 0);	/* PCK0 */
-
-	clk_set_parent(pck0, plla);
-	clk_put(plla);
-
-	info->dac_clk = pck0;
-}
-#else
-static void __init at73c213_set_clk(struct at73c213_board_info *info) {}
-#endif
+//static struct at91_udc_data __initdata ek_udc_data = {
+//	.vbus_pin	= AT91_PIN_PC5,
+//	.pullup_pin	= 0,		/* pull-up driven by UDC */
+//};
 
 /*
  * SPI devices.
  */
+static struct mtd_partition spi_boot_flash_partitions[] = {
+	{
+		.name = "bootstrap(spi)",
+		.size = 0x0001000,
+		.offset = 0,
+		.mask_flags = MTD_CAP_ROM, // RO for now
+	}, 
+	{
+		.name = "u-boot(spi)",
+		.size = 0x0040000,
+		.offset = 0x0010000,
+		.mask_flags = MTD_CAP_ROM,
+	}
+};
+
+static struct flash_platform_data spi_boot_flash_data = {
+	.name = "m25p80",
+	.parts = spi_boot_flash_partitions,
+	.nr_parts = ARRAY_SIZE(spi_boot_flash_partitions),
+	.type = "at25df041a",
+};
 static struct spi_board_info ek_spi_devices[] = {
+	{
+		/* the modalias must be the same as spi device driver name */
+		.modalias = "m25p80", /* Name of spi_driver for this device */
+		.chip_select = 1, 
+		.max_speed_hz = 25000000,     /* max spi clock (SCK) speed in HZ */
+		.bus_num = 0, /* Framework bus number */
+		.platform_data = &spi_boot_flash_data,
+//		.controller_data = &spi_flash_chip_info,
+		.mode = SPI_MODE_3,
+	},
 	{	/* lcd */
 		.modalias	= "ssd1805",
 		.chip_select	= 2,  // was 0 in hw rev 0, moved for serial boot flash
 		.max_speed_hz	= 5 * 1000 * 1000,
 		.bus_num	= 0,
 	},
-#if 0 // some day this may be the energy chips if the pic is removed
-	{	/* lcd */
-		.modalias	= "spidev",
+	{	/* energy chip 1*/
+		.modalias	= "energycs0",
 		.chip_select	= 0,
 		.max_speed_hz	= 5 * 1000 * 1000,
 		.bus_num	= 1,
 	},
-#endif	
-#if !defined(CONFIG_MMC_AT91)
-	{	/* DataFlash chip */
-		.modalias	= "mtd_dataflash",
-		.chip_select	= 1,
-		.max_speed_hz	= 15 * 1000 * 1000,
-		.bus_num	= 0,
-	},
-#if defined(CONFIG_MTD_AT91_DATAFLASH_CARD)
-	{	/* DataFlash card */
-		.modalias	= "mtd_dataflash",
-		.chip_select	= 0,
-		.max_speed_hz	= 15 * 1000 * 1000,
-		.bus_num	= 0,
-	},
-#endif
-#endif
-#if defined(CONFIG_SND_AT73C213) || defined(CONFIG_SND_AT73C213_MODULE)
-	{	/* AT73C213 DAC */
-		.modalias	= "at73c213",
-		.chip_select	= 0,
-		.max_speed_hz	= 10 * 1000 * 1000,
-		.bus_num	= 1,
-		.mode		= SPI_MODE_1,
-		.platform_data	= &at73c213_data,
-	},
-#endif
 };
 
 
@@ -362,34 +376,22 @@ static void __init ek_add_device_nand(void)
 	at91_add_device_nand(&ek_nand_data);
 }
 
-
-/*
- * MCI (SD/MMC)
- */
-static struct at91_mmc_data __initdata ek_mmc_data = {
-	.slot_b		= 1,
-	.wire4		= 1,
-//	.det_pin	= ... not connected
-//	.wp_pin		= ... not connected
-//	.vcc_pin	= ... not connected
-};
-
-
 /*
  * I2C devices
  */
-static struct at24_platform_data at24c512 = {
-	.byte_len	= SZ_512K / 8,
-	.page_size	= 128,
-	.flags		= AT24_FLAG_ADDR16,
+static struct at24_platform_data at24aa02 = {
+	.byte_len	= 2048 / 8,
+	.page_size	= 8,
 };
 
 static struct i2c_board_info __initdata ek_i2c_devices[] = {
 	{
-		I2C_BOARD_INFO("24c512", 0x50),
-		.platform_data = &at24c512,
+		I2C_BOARD_INFO("24c02", 0x50),
+		.platform_data = &at24aa02,
 	},
-	/* more devices can be added using expansion connectors */
+	{
+		I2C_BOARD_INFO("ds1374", 0x68),
+	},
 };
 
 
@@ -398,49 +400,26 @@ static void __init ek_board_init(void)
 
 	/* Serial */
 	at91_add_device_serial();
+	/* I2C */
+	at91_add_device_i2c(ek_i2c_devices, ARRAY_SIZE(ek_i2c_devices));
 	/* USB Host */
 	at91_add_device_usbh(&ek_usbh_data);
-	/* USB Device */
-	at91_add_device_udc(&ek_udc_data);
+//	/* USB Device */
+//	at91_add_device_udc(&ek_udc_data);
 	/* NAND */
 	ek_add_device_nand();
 	/* Ethernet */
 	at91_add_device_eth(&ek_macb_data);
-	/* MMC */
-	at91_add_device_mmc(0, &ek_mmc_data);
-	/* I2C */
-	at91_add_device_i2c(ek_i2c_devices, ARRAY_SIZE(ek_i2c_devices));
-	/* Compact Flash */
-	at91_add_device_cf(&ek_cf_data);
-	/* SSC (to AT73C213) */
-	at73c213_set_clk(&at73c213_data);
-	at91_add_device_ssc(AT91SAM9260_ID_SSC, ATMEL_SSC_TX);
-	/* LEDs */
-#ifdef jll 
-    if ((system_rev & 0xf) >= 9) // Lgate-50 Rev B?
-    {
-       ek_leds[0].gpio = AT91_PIN_PB19;  //Red LED moved to free modem control lines
-       ek_leds[3].gpio = AT91_PIN_PB30;  //USB PWR moved to free modem control lines
-       ek_leds[4].gpio = AT91_PIN_PB31;  //EOP PWR moved to free modem control lines
-    	/* USART0 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
-		at91_register_uart(AT91SAM9260_ID_US0, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
-			   | ATMEL_UART_DTR | ATMEL_UART_DSR | ATMEL_UART_DCD
-			   | ATMEL_UART_RI);
-
- 		/* USART1 on ttyS2. (Rx, Tx, RTS, CTS) */
-		at91_register_uart(AT91SAM9260_ID_US1, 2, ATMEL_UART_CTS | ATMEL_UART_RTS);
-    }
-#endif    
+	/* LEDs */     
 	at91_gpio_leds(ek_leds, ARRAY_SIZE(ek_leds));
-//	/* shutdown controller, wakeup button (5 msec low) */
-//	at91_sys_write(AT91_SHDW_MR, AT91_SHDW_CPTWK0_(10) | AT91_SHDW_WKMODE0_LOW
-//				| AT91_SHDW_RTTWKEN);
-
 				
 	system_serial_low = 0x600DF00D;
 	system_serial_high = 0xDEADBEEF;
 	/* SPI */
 	at91_add_device_spi(ek_spi_devices, ARRAY_SIZE(ek_spi_devices));
+	
+//
+	printk(KERN_INFO "AT91 RSTC_SR: %8x\n", at91_sys_read(AT91_RSTC_SR));
 }
 MACHINE_START(AT91SAM9G20EK, "Atmel AT91SAM9G20 Locus Energy")
 	/* Maintainer: Atmel */
