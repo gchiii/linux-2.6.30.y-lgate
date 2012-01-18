@@ -44,6 +44,7 @@
 
 #include "compat.h"
 #include "atags.h"
+#include <mach/at91_rstc.h>
 
 #ifndef MEM_SIZE
 #define MEM_SIZE	(16*1024*1024)
@@ -847,6 +848,8 @@ static int c_show(struct seq_file *m, void *v)
 	seq_printf(m, "Revision\t: %04x\n", system_rev);
 	seq_printf(m, "Serial\t\t: %08x%08x\n",
 		   system_serial_high, system_serial_low);
+	seq_printf(m, "Boot Reason\t: %08x\n", (at91_sys_read(AT91_RSTC_SR) & AT91_RSTC_RSTTYP) >> 8);
+	
 
 	return 0;
 }

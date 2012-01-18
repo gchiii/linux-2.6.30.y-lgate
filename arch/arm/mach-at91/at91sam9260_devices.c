@@ -595,7 +595,8 @@ void __init at91_add_device_nand(struct atmel_nand_data *data) {}
 
 #if defined(CONFIG_I2C_GPIO) || defined(CONFIG_I2C_GPIO_MODULE)
 
-static struct i2c_gpio_platform_data pdata = {
+// open up to global so Lgate 90 rev A can swap pins
+struct i2c_gpio_platform_data i2c_pdata = {
 	.sda_pin		= AT91_PIN_PA23,
 	.sda_is_open_drain	= 1,
 	.scl_pin		= AT91_PIN_PA24,
@@ -606,16 +607,16 @@ static struct i2c_gpio_platform_data pdata = {
 static struct platform_device at91sam9260_twi_device = {
 	.name			= "i2c-gpio",
 	.id			= -1,
-	.dev.platform_data	= &pdata,
+	.dev.platform_data	= &i2c_pdata,
 };
 
 void __init at91_add_device_i2c(struct i2c_board_info *devices, int nr_devices)
 {
-	at91_set_GPIO_periph(AT91_PIN_PA23, 1);		/* TWD (SDA) */
-	at91_set_multi_drive(AT91_PIN_PA23, 1);
+	at91_set_GPIO_periph(i2c_pdata.sda_pin, 1);		/* TWD (SDA) */
+	at91_set_multi_drive(i2c_pdata.sda_pin, 1);
 
-	at91_set_GPIO_periph(AT91_PIN_PA24, 1);		/* TWCK (SCL) */
-	at91_set_multi_drive(AT91_PIN_PA24, 1);
+	at91_set_GPIO_periph(i2c_pdata.scl_pin, 1);		/* TWCK (SCL) */
+	at91_set_multi_drive(i2c_pdata.scl_pin, 1);
 
 	i2c_register_board_info(0, devices, nr_devices);
 	platform_device_register(&at91sam9260_twi_device);
