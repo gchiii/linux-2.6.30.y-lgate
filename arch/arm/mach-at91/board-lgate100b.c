@@ -286,7 +286,7 @@ static struct at91_eth_data __initdata ek_macb_data = {
 
 
 /*
- * NAND flash
+ * NAND flash, this partition table is not used.  The partition table is passed in from U-boot as startup parameters
  */
 static struct mtd_partition __initdata ek_nand_partition[] = {
 	{
@@ -319,31 +319,9 @@ static struct atmel_nand_data __initdata ek_nand_data = {
 	.rdy_pin	= AT91_PIN_PC13,
 	.enable_pin	= AT91_PIN_PC14,
 	.partition_info	= nand_partitions,
-#if defined(CONFIG_MTD_NAND_ATMEL_BUSWIDTH_16)
-	.bus_width_16	= 1,
-#else
 	.bus_width_16	= 0,
-#endif
 };
-#ifdef CONFIG_ARCH_AT91SAM9260
-static struct sam9_smc_config __initdata ek_nand_smc_config = {
-	.ncs_read_setup		= 0,
-	.nrd_setup		= 1,
-	.ncs_write_setup	= 0,
-	.nwe_setup		= 1,
 
-	.ncs_read_pulse		= 3,
-	.nrd_pulse		= 3,
-	.ncs_write_pulse	= 3,
-	.nwe_pulse		= 3,
-
-	.read_cycle		= 5,
-	.write_cycle		= 5,
-
-	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE,
-	.tdf_cycles		= 2,
-};
-#else // CONFIG_AT91SAM9G20
 static struct sam9_smc_config __initdata ek_nand_smc_config = {
 	.ncs_read_setup		= 0,
 	.nrd_setup		= 2,
@@ -361,7 +339,7 @@ static struct sam9_smc_config __initdata ek_nand_smc_config = {
 	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE,
 	.tdf_cycles		= 3,
 };
-#endif
+
 static void __init ek_add_device_nand(void)
 {
 	/* setup bus-width (8 or 16) */
@@ -418,8 +396,7 @@ static void __init ek_board_init(void)
 	/* SPI */
 	at91_add_device_spi(ek_spi_devices, ARRAY_SIZE(ek_spi_devices));
 	
-//
-	printk(KERN_INFO "AT91 RSTC_SR: %8x\n", at91_sys_read(AT91_RSTC_SR));
+//	printk(KERN_INFO "AT91 RSTC_SR: %8x\n", at91_sys_read(AT91_RSTC_SR));
 }
 MACHINE_START(AT91SAM9G20EK, "Atmel AT91SAM9G20 Locus Energy")
 	/* Maintainer: Atmel */
