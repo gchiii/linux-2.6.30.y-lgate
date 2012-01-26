@@ -198,11 +198,15 @@ static void __init ek_map_io(void)
 				i2c_pdata.sda_pin = AT91_PIN_PA24;
 				i2c_pdata.scl_pin = AT91_PIN_PA23;
 			}
+			
+			// config ADC
+			at91_set_B_periph(AT91_PIN_PC0, 0); // channel 0 used for temp in Lgate-90
 		}
     }
 
 	/* set serial console to ttyS0 (ie, DBGU) */
 	at91_set_serial_console(0);
+	
 }
 
 static void __init ek_init_irq(void)
