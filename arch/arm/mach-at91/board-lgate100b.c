@@ -272,10 +272,11 @@ static struct spi_board_info ek_spi_devices[] = {
 		.bus_num	= 0,
 	},
 	{	/* energy chip 1*/
-		.modalias	= "energycs0",
+		.modalias	= "spidev",
 		.chip_select	= 0,
-		.max_speed_hz	= 5 * 1000 * 1000,
+		.max_speed_hz	= 1 * 1000 * 1000,
 		.bus_num	= 1,
+		.mode = SPI_MODE_0,
 	},
 };
 
