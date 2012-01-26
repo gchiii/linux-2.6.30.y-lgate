@@ -432,8 +432,8 @@ static int ds1374_probe(struct i2c_client *client,
 		dev_err(&client->dev, "unable to register the class device\n");
 		goto out_irq;
 	}
-	// used dev_err since printk did not seem to work
-	dev_err(&client->dev, "Set DS1374 to 2K trickle charge\n");
+	// used dev_err so this is displayed even in quite mode
+	printk(KERN_ERR "Set DS1374 to 2K trickle charge\n");
 	i2c_smbus_write_byte_data(client, DS1374_REG_TCR, 0xA6);
 	
 	return 0;
