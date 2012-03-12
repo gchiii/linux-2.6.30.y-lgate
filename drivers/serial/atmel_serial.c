@@ -241,7 +241,17 @@ void atmel_config_rs485(struct uart_port *port, struct serial_rs485 *rs485conf)
  */
 static u_int atmel_tx_empty(struct uart_port *port)
 {
-	return (UART_GET_CSR(port) & ATMEL_US_TXEMPTY) ? TIOCSER_TEMT : 0;
+
+   struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
+   u_int ret = (UART_GET_CSR(port) & ATMEL_US_TXEMPTY) ? TIOCSER_TEMT : 0;
+
+   if (ret && (atmel_port->rs485.flags & SER_RS485_ENABLED) &&
+	 !(atmel_port->rs485.flags & SER_RS485_RX_DURING_TX)) {
+	/* DMA done, stop TX, start RX for RS485 */
+   	atmel_start_rx(port);
+	}
+
+	return ret;
 }
 
 /*
@@ -683,11 +693,12 @@ static void atmel_tx_dma(struct uart_port *port)
 		/* Enable interrupts */
 		UART_PUT_IER(port, atmel_port->tx_done_mask);
 	} else {
-		if ((atmel_port->rs485.flags & SER_RS485_ENABLED) &&
-		    !(atmel_port->rs485.flags & SER_RS485_RX_DURING_TX)) {
-			/* DMA done, stop TX, start RX for RS485 */
-			atmel_start_rx(port);
-		}
+// not so fast, need to wait for last char.  do this when txempty
+//		if ((atmel_port->rs485.flags & SER_RS485_ENABLED) &&
+//		    !(atmel_port->rs485.flags & SER_RS485_RX_DURING_TX)) {
+//			/* DMA done, stop TX, start RX for RS485 */
+//			atmel_start_rx(port);
+//		}
 	}
 
 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
